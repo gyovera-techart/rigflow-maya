@@ -4,7 +4,7 @@
 
 > **Current release: v0.1.0 — stable historical baseline, functionally validated in Autodesk Maya 2026.3 on Windows.**
 
-[![Python syntax](https://github.com/actions/workflows/python-syntax.yml/badge.svg)](../../actions/workflows/python-syntax.yml)
+[![Python syntax](https://github.com/gyovera-techart/rigflow-maya/actions/workflows/python-syntax.yml/badge.svg)](https://github.com/gyovera-techart/rigflow-maya/actions/workflows/python-syntax.yml)
 
 ## Why RigFlow?
 
