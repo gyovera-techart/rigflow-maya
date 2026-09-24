@@ -1,0 +1,21 @@
+{
+  "naming": {
+    "joint_regex": "^(root|jnt|JNT)_[A-Za-z0-9_]+$",
+    "ignore_joints": []
+  },
+  "validation": {
+    "max_influences": 4,
+    "weight_sum_tolerance": 0.001,
+    "max_vertices_to_scan": 5000,
+    "warn_joint_scale_tolerance": 0.0001,
+    "allow_multiple_joint_roots": false
+  },
+  "export": {
+    "fbx_ascii": false,
+    "fbx_version": "FBX202000",
+    "bake_step": 1.0,
+    "include_constraints": false,
+    "include_cameras": false,
+    "include_lights": false
+  }
+}
