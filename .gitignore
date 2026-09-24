@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Maya / DCC generated files
+*.mb
+*.ma
+*.fbx
+*.abc
+*.obj
+*.usd
+*.usda
+*.usdc
+*.cache
+*.log
+maya/backup/
+workspace.mel
+
+# RigFlow generated reports / exports
+rigflow_reports/
+rigflow_exports/
+*_rigflow_report.json
+*_rigflow_report.txt
+
+# Local configuration / secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# Local development
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# OS / temporary files
+*.tmp
+*.bak
+*.swp
