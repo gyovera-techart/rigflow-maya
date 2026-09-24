@@ -6,6 +6,8 @@
 
 [![Python syntax](https://github.com/gyovera-techart/rigflow-maya/actions/workflows/python-syntax.yml/badge.svg)](https://github.com/gyovera-techart/rigflow-maya/actions/workflows/python-syntax.yml)
 
+![RigFlow Toolkit running in Autodesk Maya 2026.3](docs/images/rigflow-ui.png)
+
 ## Why RigFlow?
 
 Technical artists routinely spend time checking naming, hierarchy, skinning settings, weight integrity, and animation-export conditions. RigFlow packages these checks into a repeatable workflow with readable results and conservative automation.
