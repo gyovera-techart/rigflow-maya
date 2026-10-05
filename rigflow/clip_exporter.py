@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, Iterable, List, Tuple
 
 import maya.cmds as cmds
 import maya.mel as mel
@@ -26,6 +27,10 @@ class AnimationClip:
         return AnimationClip(safe_name, self.start, self.end, self.output_dir, self.bake)
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def ensure_fbx_plugin() -> None:
     if not cmds.pluginInfo("fbxmaya", query=True, loaded=True):
         cmds.loadPlugin("fbxmaya", quiet=True)
@@ -45,11 +50,7 @@ def _pair_hierarchies(original_root: str, duplicate_root: str) -> List[Tuple[str
 
 
 def prepare_export_skeleton(root_joint: str, start: float, end: float, step: float = 1.0) -> str:
-    """Create a non-destructive baked copy of a skeleton for export.
-
-    The working rig is never frozen or stripped. A duplicate skeleton is constrained
-    to the source, baked over the requested range, then constraints are removed.
-    """
+    """Create a non-destructive baked copy of a skeleton for export."""
     if not cmds.objExists(root_joint) or cmds.nodeType(root_joint) != "joint":
         raise ValueError("A valid root joint is required.")
 
@@ -94,11 +95,17 @@ def _configure_fbx(config: Dict) -> None:
         try:
             mel.eval(f'FBXExportFileVersion -v "{version}";')
         except RuntimeError:
-            # FBX plug-in versions differ in supported version strings.
             pass
     mel.eval(f"FBXExportConstraints -v {'true' if export_cfg.get('include_constraints', False) else 'false'};")
     mel.eval(f"FBXExportCameras -v {'true' if export_cfg.get('include_cameras', False) else 'false'};")
     mel.eval(f"FBXExportLights -v {'true' if export_cfg.get('include_lights', False) else 'false'};")
+
+    up_axis = str(export_cfg.get("up_axis", "")).strip().lower()
+    if up_axis in ("y", "z"):
+        try:
+            mel.eval(f"FBXExportUpAxis {up_axis};")
+        except RuntimeError:
+            pass
 
 
 def export_clip(root_joint: str, clip: AnimationClip, config: Dict) -> Dict:
@@ -107,11 +114,14 @@ def export_clip(root_joint: str, clip: AnimationClip, config: Dict) -> Dict:
     os.makedirs(clip.output_dir, exist_ok=True)
     output_path = os.path.normpath(os.path.join(clip.output_dir, clip.name + ".fbx"))
     export_root = None
+    started_at = _utc_now()
 
     try:
         if clip.bake:
             export_root = prepare_export_skeleton(
-                root_joint, clip.start, clip.end,
+                root_joint,
+                clip.start,
+                clip.end,
                 float(config.get("export", {}).get("bake_step", 1.0)),
             )
         else:
@@ -127,8 +137,40 @@ def export_clip(root_joint: str, clip: AnimationClip, config: Dict) -> Dict:
         if clip.bake and export_root and cmds.objExists(export_root):
             cmds.delete(export_root)
 
+    success = os.path.isfile(output_path)
+    preset = config.get("active_export_preset", {})
     return {
         "clip": asdict(clip),
         "output": output_path,
-        "success": os.path.isfile(output_path),
+        "success": success,
+        "status": "SUCCESS" if success else "FAILED",
+        "preset": dict(preset) if isinstance(preset, dict) else preset,
+        "started_at": started_at,
+        "finished_at": _utc_now(),
     }
+
+
+def batch_export_clips(root_joint: str, clips: Iterable[AnimationClip], config: Dict) -> List[Dict]:
+    """Export clips sequentially and isolate failures per clip."""
+    results = []
+    for raw_clip in clips:
+        started_at = _utc_now()
+        try:
+            result = export_clip(root_joint, raw_clip, config)
+        except Exception as exc:
+            try:
+                clip_payload = asdict(raw_clip.validated())
+            except Exception:
+                clip_payload = asdict(raw_clip)
+            result = {
+                "clip": clip_payload,
+                "output": None,
+                "success": False,
+                "status": "FAILED",
+                "error": str(exc),
+                "preset": dict(config.get("active_export_preset", {})),
+                "started_at": started_at,
+                "finished_at": _utc_now(),
+            }
+        results.append(result)
+    return results

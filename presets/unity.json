@@ -1,0 +1,14 @@
+{
+  "id": "unity",
+  "label": "Unity",
+  "export": {
+    "fbx_ascii": false,
+    "fbx_version": "FBX202000",
+    "bake_step": 1.0,
+    "include_constraints": false,
+    "include_cameras": false,
+    "include_lights": false,
+    "up_axis": "y"
+  },
+  "notes": "Conservative animation-skeleton preset for Unity-oriented delivery."
+}

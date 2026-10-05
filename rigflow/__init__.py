@@ -3,7 +3,7 @@
 Character Technical Art utilities for rig validation, skin audits and animation export.
 """
 
-__version__ = "0.1.0"
+from .version import __version__
 
 
 def show():

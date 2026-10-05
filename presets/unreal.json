@@ -1,0 +1,14 @@
+{
+  "id": "unreal",
+  "label": "Unreal Engine",
+  "export": {
+    "fbx_ascii": false,
+    "fbx_version": "FBX202000",
+    "bake_step": 1.0,
+    "include_constraints": false,
+    "include_cameras": false,
+    "include_lights": false,
+    "up_axis": "y"
+  },
+  "notes": "Conservative animation-skeleton preset. Engine-specific import settings remain explicit downstream."
+}

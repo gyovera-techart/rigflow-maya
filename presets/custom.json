@@ -1,0 +1,14 @@
+{
+  "id": "custom",
+  "label": "Custom / Studio",
+  "export": {
+    "fbx_ascii": false,
+    "fbx_version": "FBX202000",
+    "bake_step": 1.0,
+    "include_constraints": false,
+    "include_cameras": false,
+    "include_lights": false,
+    "up_axis": "y"
+  },
+  "notes": "Edit this JSON or add another preset JSON without changing UI code."
+}

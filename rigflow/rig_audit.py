@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import maya.cmds as cmds
 
 from .result import CheckResult, Severity
-from .validators import _mesh_transforms, _skin_cluster_for_mesh
+from .validators import _mesh_transforms, _skin_cluster_for_mesh, _scan_weights
 
 
 def audit_joint_orientation(config: Dict) -> CheckResult:
@@ -15,8 +15,8 @@ def audit_joint_orientation(config: Dict) -> CheckResult:
         children = cmds.listRelatives(joint, children=True, type="joint", fullPath=True) or []
         orient = cmds.getAttr(joint + ".jointOrient")[0]
         rotate_axis = cmds.getAttr(joint + ".rotateAxis")[0]
-        # We avoid declaring zero jointOrient intrinsically wrong. The audit flags
-        # non-zero rotateAxis because it often hides an extra orientation layer.
+        # Zero jointOrient is not intrinsically wrong. Non-zero rotateAxis is
+        # surfaced because it adds an orientation layer worth reviewing.
         if any(abs(v) > 1e-5 for v in rotate_axis):
             suspicious.append(joint)
             details[joint] = {
@@ -89,27 +89,33 @@ def audit_weight_sums(config: Dict) -> CheckResult:
     tolerance = float(config["validation"].get("weight_sum_tolerance", 0.001))
     scan_limit = int(config["validation"].get("max_vertices_to_scan", 5000))
     offenders = []
+    backends = {}
     for mesh in _mesh_transforms():
         skin = _skin_cluster_for_mesh(mesh)
         if not skin:
             continue
-        verts = cmds.ls(mesh + ".vtx[*]", flatten=True) or []
-        for vtx in verts[:scan_limit]:
-            weights = cmds.skinPercent(skin, vtx, query=True, value=True) or []
+        rows, backend = _scan_weights(mesh, skin, scan_limit, config)
+        backends[mesh] = backend
+        for index, weights in enumerate(rows):
             total = sum(weights)
             if abs(total - 1.0) > tolerance:
-                offenders.append(vtx)
+                offenders.append(f"{mesh}.vtx[{index}]")
     if offenders:
         return CheckResult(
             "weight_sums", "Weight sums", Severity.ERROR,
             f"{len(offenders)} scanned vertex/vertices do not sum to 1.0 within tolerance {tolerance}.",
-            offenders, {"scan_limit": scan_limit, "tolerance": tolerance},
+            offenders,
+            {"scan_limit": scan_limit, "tolerance": tolerance, "scanner_backend": backends},
         )
-    return CheckResult("weight_sums", "Weight sums", Severity.PASS,
-                       "Scanned vertex weights are normalized within tolerance.")
+    return CheckResult(
+        "weight_sums", "Weight sums", Severity.PASS,
+        "Scanned vertex weights are normalized within tolerance.",
+        details={"scan_limit": scan_limit, "tolerance": tolerance, "scanner_backend": backends},
+    )
 
 
 def run_rig_audit(config: Dict) -> List[CheckResult]:
+    # Backward-compatible public entry point. The v0.2 UI uses ValidatorRegistry.
     results = [audit_joint_orientation(config)]
     results.extend(audit_skin_settings(config))
     results.append(audit_weight_sums(config))
@@ -123,5 +129,7 @@ def apply_fix(fix_id: str, nodes: List[str]) -> str:
             if cmds.objExists(skin) and cmds.nodeType(skin) == "skinCluster":
                 cmds.setAttr(skin + ".normalizeWeights", 1)
                 changed += 1
+        if changed == 0:
+            raise RuntimeError("No valid skinCluster nodes were available for this fix.")
         return f"Enabled interactive weight normalization on {changed} skinCluster(s)."
     raise ValueError(f"Unknown or unsafe fix: {fix_id}")

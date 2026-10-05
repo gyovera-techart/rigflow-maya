@@ -16,6 +16,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "max_vertices_to_scan": 5000,
         "warn_joint_scale_tolerance": 0.0001,
         "allow_multiple_joint_roots": False,
+        "use_openmaya_skin_scanner": True,
     },
     "export": {
         "fbx_ascii": False,

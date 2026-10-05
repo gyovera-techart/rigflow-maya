@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import maya.cmds as cmds
 
@@ -30,6 +30,23 @@ def _skin_cluster_for_mesh(transform: str) -> Optional[str]:
     history = cmds.listHistory(shapes[0], pruneDagObjects=True) or []
     skins = cmds.ls(history, type="skinCluster") or []
     return skins[0] if skins else None
+
+
+def _scan_weights(mesh: str, skin: str, limit: int, config: Dict) -> Tuple[List[List[float]], str]:
+    if bool(config.get("validation", {}).get("use_openmaya_skin_scanner", True)):
+        try:
+            from .skin_scanner import scan_skin_weights
+            payload = scan_skin_weights(mesh, skin, limit)
+            return payload["weights"], payload["backend"]
+        except Exception:
+            # Conservative fallback preserves v0.1 behavior for unsupported scenes.
+            pass
+
+    verts = cmds.ls(mesh + ".vtx[*]", flatten=True) or []
+    rows = []
+    for vtx in verts[:limit]:
+        rows.append(list(cmds.skinPercent(skin, vtx, query=True, value=True) or []))
+    return rows, "cmds.skinPercent"
 
 
 def check_joint_naming(config: Dict) -> CheckResult:
@@ -102,27 +119,23 @@ def check_unskinned_meshes(config: Dict) -> CheckResult:
                        "All renderable meshes have a skinCluster.")
 
 
-def _over_influenced_vertices(mesh: str, skin: str, max_influences: int, limit: int) -> List[str]:
-    verts = cmds.ls(mesh + ".vtx[*]", flatten=True) or []
-    offenders = []
-    for vtx in verts[:limit]:
-        values = cmds.skinPercent(skin, vtx, query=True, value=True) or []
-        active = sum(1 for value in values if value > 1e-8)
-        if active > max_influences:
-            offenders.append(vtx)
-    return offenders
-
-
 def check_max_influences(config: Dict) -> CheckResult:
     max_influences = int(config["validation"].get("max_influences", 4))
     scan_limit = int(config["validation"].get("max_vertices_to_scan", 5000))
     offenders = []
     per_mesh = {}
+    backends = {}
     for mesh in _mesh_transforms():
         skin = _skin_cluster_for_mesh(mesh)
         if not skin:
             continue
-        found = _over_influenced_vertices(mesh, skin, max_influences, scan_limit)
+        rows, backend = _scan_weights(mesh, skin, scan_limit, config)
+        backends[mesh] = backend
+        found = []
+        for index, values in enumerate(rows):
+            active = sum(1 for value in values if value > 1e-8)
+            if active > max_influences:
+                found.append(f"{mesh}.vtx[{index}]")
         if found:
             offenders.extend(found)
             per_mesh[mesh] = len(found)
@@ -131,12 +144,17 @@ def check_max_influences(config: Dict) -> CheckResult:
             "max_influences", "Maximum skin influences", Severity.ERROR,
             f"{len(offenders)} scanned vertex/vertices exceed {max_influences} influences.",
             offenders,
-            {"max_influences": max_influences, "per_mesh": per_mesh, "scan_limit": scan_limit},
+            {
+                "max_influences": max_influences,
+                "per_mesh": per_mesh,
+                "scan_limit": scan_limit,
+                "scanner_backend": backends,
+            },
         )
     return CheckResult(
         "max_influences", "Maximum skin influences", Severity.PASS,
         f"No scanned vertices exceed {max_influences} influences.",
-        details={"scan_limit": scan_limit},
+        details={"scan_limit": scan_limit, "scanner_backend": backends},
     )
 
 
@@ -150,6 +168,7 @@ CHECKS = [
 
 
 def run_scene_validation(config: Dict) -> List[CheckResult]:
+    # Backward-compatible public entry point. The v0.2 UI uses ValidatorRegistry.
     results = []
     for check in CHECKS:
         try:
